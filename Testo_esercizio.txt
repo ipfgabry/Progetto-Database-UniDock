@@ -1,0 +1,1 @@
+Il sistema gestisce l'assegnazione dei posti barca in base alle dimensioni (pescaggio, lunghezza) delle imbarcazioni. Bisogna tracciare i contratti di ormeggio (stagionali, annuali, transiti giornalieri) e i proprietari. Inoltre, il database deve registrare i consumi specifici per ogni posto barca (elettricità, acqua) e i servizi aggiuntivi richiesti (pulizia carena, assistenza 

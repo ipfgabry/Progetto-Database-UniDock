@@ -1,0 +1,118 @@
+-- =============================================================================
+-- UNIDOCK - SETUP E CONFIGURAZIONE (DDL)
+-- =============================================================================
+DROP DATABASE IF EXISTS unidock;
+CREATE DATABASE unidock;
+USE unidock;
+
+SET FOREIGN_KEY_CHECKS = 0;
+
+-- CREAZIONE TABELLE [cite: 97, 98, 99, 100, 101, 103, 104, 105, 106]
+CREATE TABLE PROPRIETARIO (
+  CF VARCHAR(16) PRIMARY KEY,
+  Nome VARCHAR(50) NOT NULL,
+  Cognome VARCHAR(50) NOT NULL,
+  Telefono VARCHAR(20)
+) ENGINE=InnoDB;
+
+CREATE TABLE IMBARCAZIONE (
+    ID_Barca INT AUTO_INCREMENT PRIMARY KEY,
+    Targa VARCHAR(20) UNIQUE NOT NULL,       
+    Nome VARCHAR(50),
+    Modello VARCHAR(50),
+    Lunghezza FLOAT,
+    Pescaggio FLOAT,
+    CF_Proprietario VARCHAR(16),
+    FOREIGN KEY (CF_Proprietario) REFERENCES PROPRIETARIO(CF)
+) ENGINE=InnoDB;
+
+CREATE TABLE MOLO (
+  ID_Molo CHAR(5) PRIMARY KEY,
+  Nome_Molo VARCHAR(50) NOT NULL
+) ENGINE=InnoDB;
+
+CREATE TABLE POSTO_BARCA (
+  ID_Posto INT PRIMARY KEY,
+  Codice_Stallo VARCHAR(10) NOT NULL,
+  LunghezzaMax FLOAT NOT NULL,
+  PescaggioMax FLOAT NOT NULL,
+  ID_Molo CHAR(5),
+  FOREIGN KEY (ID_Molo) REFERENCES MOLO(ID_Molo)
+) ENGINE=InnoDB;
+
+CREATE TABLE CONTRATTO (
+    Num_Cont INT PRIMARY KEY,
+    Data_Inizio DATE NOT NULL,
+    Data_Fine DATE NOT NULL,
+    Tipologia VARCHAR(20),
+    Stato_Pagamento VARCHAR(20),
+    ID_Barca INT,
+    ID_Posto INT,
+    FOREIGN KEY (ID_Barca) REFERENCES IMBARCAZIONE(ID_Barca),
+    FOREIGN KEY (ID_Posto) REFERENCES POSTO_BARCA(ID_Posto)
+) ENGINE=InnoDB;
+
+CREATE TABLE CONSUMO (
+    ID_Consumo INT AUTO_INCREMENT PRIMARY KEY,
+    Tipo VARCHAR(20),
+    Valore FLOAT,
+    Data DATE,
+    ID_Posto INT,
+    FOREIGN KEY (ID_Posto) REFERENCES POSTO_BARCA(ID_Posto)
+) ENGINE=InnoDB;
+
+CREATE TABLE PENALE (
+  ID_Penale INT AUTO_INCREMENT PRIMARY KEY,
+  Motivo VARCHAR(255),
+  Importo DECIMAL(10,2) NOT NULL,
+  Data DATE NOT NULL,
+  Num_Cont INT,
+  FOREIGN KEY (Num_Cont) REFERENCES CONTRATTO(Num_Cont) ON DELETE CASCADE
+) ENGINE=InnoDB;
+
+CREATE TABLE STAFF (
+  Matricola INT PRIMARY KEY,
+  Nome VARCHAR(50) NOT NULL,
+  Cognome VARCHAR(50) NOT NULL,
+  Ruolo VARCHAR(50)
+) ENGINE=InnoDB;
+
+CREATE TABLE SERVIZIO_EXTRA (
+  ID_Servizio INT PRIMARY KEY,
+  Descrizione VARCHAR(255) NOT NULL,
+  Costo DECIMAL(10,2) NOT NULL
+) ENGINE=InnoDB;
+
+CREATE TABLE EROGAZIONE_SERVIZIO (
+  Num_Cont INT,
+  ID_Servizio INT,
+  Data_Ora TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+  Matricola_Staff INT,
+  PRIMARY KEY (Num_Cont, ID_Servizio, Data_Ora),
+  FOREIGN KEY (Num_Cont) REFERENCES CONTRATTO(Num_Cont) ON DELETE CASCADE,
+  FOREIGN KEY (ID_Servizio) REFERENCES SERVIZIO_EXTRA(ID_Servizio),
+  FOREIGN KEY (Matricola_Staff) REFERENCES STAFF(Matricola)
+) ENGINE=InnoDB;
+
+SET FOREIGN_KEY_CHECKS = 1;
+
+-- INDICI E OTTIMIZZAZIONE [cite: 162, 163, 165]
+CREATE INDEX idx_cliente ON PROPRIETARIO(Cognome);
+CREATE INDEX idx_nome_barca ON IMBARCAZIONE(Nome);
+CREATE INDEX idx_periodo ON CONTRATTO(Data_Inizio, Data_Fine);
+
+-- VISTA PER IL CALCOLO DINAMICO (Op8) [cite: 71, 87, 157]
+CREATE OR REPLACE VIEW Report_Contabile AS
+SELECT 
+    C.Num_Cont AS 'ID_Contratto',
+    I.Nome AS 'Imbarcazione',
+    PR.Cognome AS 'Cliente',
+    (DATEDIFF(C.Data_Fine, C.Data_Inizio) * 50) AS 'Costo_Sosta',
+    COALESCE((SELECT SUM(S.Costo) FROM EROGAZIONE_SERVIZIO E JOIN SERVIZIO_EXTRA S ON E.ID_Servizio = S.ID_Servizio WHERE E.Num_Cont = C.Num_Cont), 0) AS 'Costo_Extra',
+    COALESCE((SELECT SUM(P.Importo) FROM PENALE P WHERE P.Num_Cont = C.Num_Cont), 0) AS 'Costo_Penali',
+    ((DATEDIFF(C.Data_Fine, C.Data_Inizio) * 50) + 
+     COALESCE((SELECT SUM(S.Costo) FROM EROGAZIONE_SERVIZIO E JOIN SERVIZIO_EXTRA S ON E.ID_Servizio = S.ID_Servizio WHERE E.Num_Cont = C.Num_Cont), 0) + 
+     COALESCE((SELECT SUM(P.Importo) FROM PENALE P WHERE P.Num_Cont = C.Num_Cont), 0)) AS 'TOTALE_DOVUTO'
+FROM CONTRATTO C
+JOIN IMBARCAZIONE I ON C.ID_Barca = I.ID_Barca
+JOIN PROPRIETARIO PR ON I.CF_Proprietario = PR.CF;
